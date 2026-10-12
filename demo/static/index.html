@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PII gateway demo</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="bar">
+  <span class="brand">pii-gateway</span>
+  <span class="badge" id="mode" data-testid="mode">-</span>
+  <span class="muted">session</span>
+  <code id="sid" data-testid="sid">-</code>
+  <button id="new" data-testid="new-session">New session</button>
+</header>
+<main>
+  <section class="panel" id="p-agent">
+    <h2>Agent</h2>
+    <div class="scroll" id="chat" data-testid="chat"><div class="empty">No messages</div></div>
+    <form id="form">
+      <input id="msg" data-testid="msg" autocomplete="off" placeholder="Message">
+      <button id="send" data-testid="send" type="submit">Send</button>
+    </form>
+  </section>
+  <section class="panel" id="p-map">
+    <h2>Mapping <span class="count" id="map-count">0</span></h2>
+    <div class="scroll grow" id="map-wrap">
+      <table id="map" data-testid="mapping">
+        <thead><tr><th>Real</th><th>Handle</th><th>Type</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="empty" id="map-empty">No mappings</div>
+    </div>
+    <h2 class="sub">Audit</h2>
+    <div class="scroll audit" id="audit" data-testid="audit"><div class="empty">No events</div></div>
+  </section>
+  <section class="panel" id="p-prov">
+    <h2>Provider <span class="count" id="req-count">0</span>
+      <span class="badge ok" id="leak" data-testid="leak" title="Real values found in upstream payloads">leaks 0</span></h2>
+    <div class="scroll reqs" id="reqs" data-testid="requests"><div class="empty">No requests</div></div>
+    <pre class="scroll grow payload" id="payload" data-testid="payload"></pre>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

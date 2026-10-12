@@ -1,0 +1,22 @@
+# Binaries
+/bin/
+*.exe
+*.test
+*.out
+
+# Coverage
+coverage.out
+coverage.html
+
+# Go workspace
+go.work
+go.work.sum
+
+# VitePress / node (docs site)
+node_modules/
+*.log
+
+# Editor / OS
+.DS_Store
+.idea/
+*.swp

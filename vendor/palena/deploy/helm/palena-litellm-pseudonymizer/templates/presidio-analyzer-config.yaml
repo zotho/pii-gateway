@@ -1,0 +1,91 @@
+{{- if and .Values.presidio.analyzer.enabled (include "pseudonymizer.analyzer.needsConfig" .) }}
+{{- $langs := splitList "," (include "pseudonymizer.languages" .) -}}
+{{- $models := include "pseudonymizer.spacyModels" . | fromYaml -}}
+{{- $multi := include "pseudonymizer.multilingual" . -}}
+{{- $denyLists := .Values.presidio.analyzer.denyLists -}}
+{{- with .Values.presidio.analyzer.organizations }}
+{{- $denyLists = append $denyLists (dict "entity" "ORGANIZATION" "name" "Known organizations" "terms" .) -}}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "pseudonymizer.analyzer.fullname" . }}-config
+  labels:
+    {{- include "pseudonymizer.labels" . | nindent 4 }}
+    app.kubernetes.io/component: presidio-analyzer
+data:
+  {{- if or .Values.presidio.analyzer.nerOrganization $multi }}
+  # NLP config: one spaCy model per language. ORGANIZATION detection is
+  # enabled when nerOrganization is on (Presidio ships it off).
+  default.yaml: |
+    nlp_engine_name: spacy
+    models:
+      {{- range $langs }}
+      -
+        lang_code: {{ . }}
+        model_name: {{ get $models . }}
+      {{- end }}
+    ner_model_configuration:
+      model_to_presidio_entity_mapping:
+        PER: PERSON
+        PERSON: PERSON
+        NORP: NRP
+        FAC: LOCATION
+        LOC: LOCATION
+        GPE: LOCATION
+        LOCATION: LOCATION
+        ORG: ORGANIZATION
+        ORGANIZATION: ORGANIZATION
+        DATE: DATE_TIME
+        TIME: DATE_TIME
+      low_confidence_score_multiplier: 0.4
+      low_score_entity_names:
+      -
+      labels_to_ignore:
+      - CARDINAL
+      - EVENT
+      - LANGUAGE
+      - LAW
+      - MONEY
+      - ORDINAL
+      - PERCENT
+      - PRODUCT
+      - QUANTITY
+      - WORK_OF_ART
+      # The German, French and Italian models tag everything else as MISC.
+      - MISC
+      {{- if not .Values.presidio.analyzer.nerOrganization }}
+      - ORG
+      - ORGANIZATION
+      {{- end }}
+  {{- end }}
+  {{- if $multi }}
+  # The analyzer refuses to start unless its languages match the registry's.
+  default_analyzer.yaml: |
+    supported_languages:
+      {{- range $langs }}
+      - {{ . }}
+      {{- end }}
+    default_score_threshold: 0
+  {{- end }}
+  {{- if include "pseudonymizer.analyzer.needsRecognizers" . }}
+  {{- $header := printf "supported_languages:\n%s\n" (include "pseudonymizer.yamlList" $langs) -}}
+  {{- $base := .Files.Get "files/recognizers-base.yaml" | replace "supported_languages: \n  - en\n" $header -}}
+  {{- $lines := list "" -}}
+  {{- range $denyLists -}}
+  {{- $lines = append $lines (printf "  - name: %s" (.name | default (printf "Deny list %s" .entity) | quote)) -}}
+  {{- $lines = append $lines (printf "    supported_languages: [%s]" (join ", " $langs)) -}}
+  {{- $lines = append $lines (printf "    supported_entity: %s" (required "presidio.analyzer.denyLists[].entity is required" .entity | quote)) -}}
+  {{- $lines = append $lines "    type: custom" -}}
+  {{- $lines = append $lines "    deny_list_score: 0.9" -}}
+  {{- $lines = append $lines "    deny_list:" -}}
+  {{- range .terms -}}
+  {{- $lines = append $lines (printf "      - %s" (. | toString | toJson)) -}}
+  {{- end -}}
+  {{- end }}
+  # Full recognizer registry (predefined), in every configured language, plus
+  # the exact-match deny-lists.
+  default_recognizers.yaml: |
+{{ printf "%s%s" $base (join "\n" $lines) | indent 4 }}
+  {{- end }}
+{{- end }}

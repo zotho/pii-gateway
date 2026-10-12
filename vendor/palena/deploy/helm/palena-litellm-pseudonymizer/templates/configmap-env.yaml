@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "pseudonymizer.fullname" . }}-env
+  labels:
+    {{- include "pseudonymizer.labels" . | nindent 4 }}
+data:
+  PALENA_PSEUDONYMIZER_HTTP_ADDR: ":{{ .Values.service.port }}"
+  PALENA_PSEUDONYMIZER_LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  PALENA_PSEUDONYMIZER_LOG_FORMAT: {{ .Values.config.logFormat | quote }}
+  # int64 first: Helm parses YAML numbers as float64, and `quote` alone renders a
+  # large one in scientific notation ("3.3554432e+07"), which the service rejects
+  # with strconv.ParseInt: invalid syntax.
+  PALENA_PSEUDONYMIZER_MAX_REQUEST_BYTES: {{ .Values.config.maxRequestBytes | int64 | quote }}
+  # Presidio
+  PALENA_PSEUDONYMIZER_PRESIDIO_ANALYZER_URL: {{ include "pseudonymizer.analyzerURL" . | quote }}
+  PALENA_PSEUDONYMIZER_PRESIDIO_IMAGE_REDACTOR_URL: {{ include "pseudonymizer.imageRedactorURL" . | quote }}
+  PALENA_PSEUDONYMIZER_PRESIDIO_SCORE_THRESHOLD: {{ .Values.config.scoreThreshold | quote }}
+  PALENA_PSEUDONYMIZER_PRESIDIO_ENTITIES: {{ .Values.config.entities | quote }}
+  PALENA_PSEUDONYMIZER_PRESIDIO_LANGUAGE: {{ .Values.config.language | quote }}
+  PALENA_PSEUDONYMIZER_PRESIDIO_LANGUAGES: {{ include "pseudonymizer.languages" . | quote }}
+  PALENA_PSEUDONYMIZER_ENTITY_SCORE_THRESHOLD: {{ .Values.config.entityScoreThreshold | quote }}
+  PALENA_PSEUDONYMIZER_ENTITY_STRATEGY_DEFAULT: {{ .Values.config.entityStrategyDefault | quote }}
+  PALENA_PSEUDONYMIZER_ENTITY_STRATEGY: {{ .Values.config.entityStrategy | quote }}
+  # Redis
+  PALENA_PSEUDONYMIZER_REDIS_URL: {{ include "pseudonymizer.redisURL" . | quote }}
+  PALENA_PSEUDONYMIZER_REDIS_KEY_PREFIX: {{ .Values.redis.keyPrefix | quote }}
+  # The service parses this as a Go time.Duration, which REQUIRES a unit, while
+  # the value is named (and documented) in seconds — so a plain number, the
+  # obvious thing to write and what values.yaml ships, made the service exit at
+  # startup: `converting '3600' to type time.Duration: missing unit`. Accept both
+  # a bare number (seconds) and an explicit duration such as "90m".
+  PALENA_PSEUDONYMIZER_REDIS_SESSION_TTL_SECONDS: {{ if regexMatch "^[0-9]+$" (toString .Values.config.session.ttlSeconds) }}{{ printf "%vs" .Values.config.session.ttlSeconds | quote }}{{ else }}{{ .Values.config.session.ttlSeconds | quote }}{{ end }}
+  # Session / text
+  PALENA_PSEUDONYMIZER_SESSION_METADATA_KEY: {{ .Values.config.session.metadataKey | quote }}
+  PALENA_PSEUDONYMIZER_DECOMPOSE_PERSON_NAMES: {{ .Values.config.decomposePersonNames | quote }}
+  PALENA_PSEUDONYMIZER_ALLOW_LIST: {{ .Values.config.allowList | quote }}
+  # Non-text content
+  PALENA_PSEUDONYMIZER_NON_TEXT_PII_ACTION: {{ .Values.config.nonText.piiAction | quote }}
+  PALENA_PSEUDONYMIZER_MAX_IMAGE_BYTES: {{ .Values.config.nonText.maxImageBytes | int64 | quote }}
+  PALENA_PSEUDONYMIZER_MAX_IMAGES_PER_REQUEST: {{ .Values.config.nonText.maxImagesPerRequest | quote }}
+  {{- with .Values.config.pools.person }}
+  PALENA_PSEUDONYMIZER_POOL_PERSON: {{ join "," . | quote }}
+  {{- end }}
+  {{- with .Values.config.pools.organization }}
+  PALENA_PSEUDONYMIZER_POOL_ORGANIZATION: {{ join "," . | quote }}
+  {{- end }}
+  {{- with .Values.config.pools.location }}
+  PALENA_PSEUDONYMIZER_POOL_LOCATION: {{ join "," . | quote }}
+  {{- end }}

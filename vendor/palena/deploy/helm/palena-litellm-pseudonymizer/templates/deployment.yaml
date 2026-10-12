@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "pseudonymizer.fullname" . }}
+  labels:
+    {{- include "pseudonymizer.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    # NOT componentSelectorLabels: spec.selector is immutable once created, so
+    # narrowing it here would fail every upgrade from <= 0.4.0 with "field is
+    # immutable". It stays as-is; the component label is added to the pod
+    # template below, which is what the Service/PDB/ServiceMonitor select on.
+    # Overlap with the bundled dependencies is harmless for the ReplicaSet —
+    # their pods already carry a controller ownerRef, so they cannot be adopted.
+    matchLabels:
+      {{- include "pseudonymizer.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        # Roll the deployment when the env config changes.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap-env.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "pseudonymizer.componentSelectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "pseudonymizer.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: guardrail
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "pseudonymizer.fullname" . }}-env
+          env:
+            {{- if .Values.apiKey.enabled }}
+            - name: PALENA_PSEUDONYMIZER_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  {{- if .Values.apiKey.existingSecret }}
+                  name: {{ .Values.apiKey.existingSecret }}
+                  key: {{ .Values.apiKey.existingSecretKey }}
+                  {{- else }}
+                  name: {{ include "pseudonymizer.fullname" . }}-apikey
+                  key: api-key
+                  {{- end }}
+            {{- end }}
+            {{- if .Values.deterministic.enabled }}
+            - name: PALENA_PSEUDONYMIZER_DETERMINISTIC_SECRET
+              valueFrom:
+                secretKeyRef:
+                  {{- if .Values.deterministic.existingSecret }}
+                  name: {{ .Values.deterministic.existingSecret }}
+                  key: {{ .Values.deterministic.existingSecretKey }}
+                  {{- else }}
+                  name: {{ include "pseudonymizer.fullname" . }}-deterministic
+                  key: deterministic-secret
+                  {{- end }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

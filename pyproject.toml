@@ -1,0 +1,35 @@
+[project]
+name = "pii-gateway"
+version = "0.0.1"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "litellm[proxy]",
+  "presidio-analyzer",
+  "spacy>=3.8,<3.9",
+  "fastapi",
+  "uvicorn",
+  "starlette",
+  "httpx",
+  "pytest",
+  "pytest-asyncio",
+  "redis",
+  "pyyaml",
+  "en-core-web-lg",
+  "ru-core-news-lg",
+  "flask>=3.1.3",
+  "waitress>=3.0.2",
+  "prometheus-client>=0.26.0",
+]
+[project.optional-dependencies]
+mitm = ["mitmproxy"]
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+en-core-web-lg = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl" }
+ru-core-news-lg = { url = "https://github.com/explosion/spacy-models/releases/download/ru_core_news_lg-3.8.0/ru_core_news_lg-3.8.0-py3-none-any.whl" }
+
+[dependency-groups]
+dev = [
+    "pytest-playwright",
+]

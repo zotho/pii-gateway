@@ -1,0 +1,48 @@
+# Presidio Analyzer NLP config with ORGANIZATION detection ENABLED.
+#
+# This is Presidio's stock default.yaml with one change: ORGANIZATION is
+# removed from `labels_to_ignore`. Presidio ships it disabled because
+# spaCy's ORG label "has many false positives" — enabling it means some
+# non-org tokens may be flagged (and thus pseudonymized). For a
+# pseudonymizer a false-positive org is a harmless extra substitution,
+# but if it garbles too much text, prefer the deny_list recognizer in
+# recognizers.yaml (exact-match, zero false positives) and keep ORG
+# disabled here.
+#
+# Mounted over /app/presidio_analyzer/conf/default.yaml — see
+# docker-compose.yml.
+nlp_engine_name: spacy
+models:
+  -
+    lang_code: en
+    model_name: en_core_web_lg
+
+ner_model_configuration:
+  model_to_presidio_entity_mapping:
+    PER: PERSON
+    PERSON: PERSON
+    NORP: NRP
+    FAC: LOCATION
+    LOC: LOCATION
+    GPE: LOCATION
+    LOCATION: LOCATION
+    ORG: ORGANIZATION
+    ORGANIZATION: ORGANIZATION
+    DATE: DATE_TIME
+    TIME: DATE_TIME
+
+  low_confidence_score_multiplier: 0.4
+  low_score_entity_names:
+  -
+  # ORGANIZATION intentionally NOT ignored here (unlike Presidio's default).
+  labels_to_ignore:
+  - CARDINAL
+  - EVENT
+  - LANGUAGE
+  - LAW
+  - MONEY
+  - ORDINAL
+  - PERCENT
+  - PRODUCT
+  - QUANTITY
+  - WORK_OF_ART

@@ -1,0 +1,207 @@
+# Default values for palena-litellm-pseudonymizer.
+
+# -- Number of guardrail service replicas (ignored when autoscaling.enabled).
+replicaCount: 2
+
+image:
+  repository: ghcr.io/palenaai/palena-litellm-pseudonymizer
+  # -- Overrides the image tag (defaults to .Chart.AppVersion).
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+service:
+  type: ClusterIP
+  port: 8080
+
+# -- Resource requests/limits for the guardrail service.
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: "1"
+    # Several config.languages load the language classifier's models (~140Mi).
+    memory: 512Mi
+
+# ---------------------------------------------------------------------------
+# Guardrail behaviour → PALENA_PSEUDONYMIZER_* env vars. See docs/CONFIG.md.
+# ---------------------------------------------------------------------------
+config:
+  logLevel: info          # debug | info | warn | error
+  logFormat: json         # json | text
+  scoreThreshold: 0.7
+  # Entity types Presidio detects & pseudonymizes. Add structured PII to
+  # opt in: e.g. "PERSON,ORGANIZATION,CREDIT_CARD,US_SSN,EMAIL_ADDRESS".
+  # LOCATION is intentionally excluded by default (city drift).
+  entities: "PERSON,ORGANIZATION"
+  # Per-type minimum score, overriding scoreThreshold: "TYPE:score,…".
+  # Presidio scores every phone number 0.4, so without the default override
+  # PHONE_NUMBER would never be masked under the 0.7 threshold.
+  entityScoreThreshold: "PHONE_NUMBER:0.4"
+  # Language Presidio analyzes in, when `languages` is empty.
+  language: en
+  # Several languages (en, de, fr, it): each message is classified among them
+  # and analyzed in its own language; the first is the fallback for text too
+  # short to classify. Anything other than English alone switches the
+  # analyzer to presidio.analyzer.multilingualImage, and each extra language
+  # needs roughly 800Mi more analyzer memory (raise
+  # presidio.analyzer.resources accordingly).
+  languages: []
+  #   - en
+  #   - de
+  # Substitution strategy. Nominal identities (PERSON/ORG/LOCATION) use
+  # realistic fake names; structured PII (cards, SSNs, emails, IDs) uses
+  # reversible tokens like <CREDIT_CARD_1>.
+  # entityStrategyDefault applies to enabled non-nominal types; entityStrategy
+  # overrides per type, e.g. "PHONE_NUMBER:pool,CREDIT_CARD:token".
+  entityStrategyDefault: token
+  entityStrategy: ""
+  decomposePersonNames: true
+  # Terms never pseudonymized even when detected (your brand/product names,
+  # public figures, words Presidio over-tags). Comma-separated, case-insensitive.
+  allowList: ""
+  maxRequestBytes: 33554432
+  session:
+    metadataKey: session_id
+    ttlSeconds: 3600
+  nonText:
+    piiAction: redact     # redact | block | passthrough
+    maxImageBytes: 20971520
+    maxImagesPerRequest: 20
+  # Pseudonym pools. Empty lists fall back to the service's built-in
+  # defaults (gender-neutral persons + neutral orgs). Provide a
+  # comma-free YAML list to override.
+  pools:
+    person: []
+    organization: []
+    location: []
+
+# -- Shared-secret API key clients must send as `x-api-key`. When disabled
+#    the service accepts any request (dev mode).
+apiKey:
+  enabled: false
+  # Provide a value to have the chart create a Secret, OR reference an
+  # existing Secret with existingSecret/existingSecretKey.
+  value: ""
+  existingSecret: ""
+  existingSecretKey: api-key
+
+# -- Deterministic pseudonyms: when enabled, pool assignment uses a keyed HMAC
+#    so the same real name maps to the same pseudonym across sessions. Secret-
+#    grade; wired as a Secret just like apiKey.
+deterministic:
+  enabled: false
+  value: ""
+  existingSecret: ""
+  existingSecretKey: deterministic-secret
+
+# ---------------------------------------------------------------------------
+# Redis (session mapping store).
+# ---------------------------------------------------------------------------
+redis:
+  # -- Bundle a single-instance Redis. Disable and set `url` to use your own
+  #    (managed Redis strongly recommended for production).
+  enabled: true
+  # External URL when enabled=false, e.g. redis://my-redis:6379/0
+  url: ""
+  keyPrefix: "palena:pseudonymizer"
+  image: redis:7-alpine
+  resources:
+    requests: { cpu: 25m, memory: 32Mi }
+    limits: { cpu: 250m, memory: 256Mi }
+  # -- Bundled Redis is ephemeral by default. Enable for a PVC.
+  persistence:
+    enabled: false
+    size: 1Gi
+    storageClass: ""
+
+# ---------------------------------------------------------------------------
+# Presidio (external PII detection).
+# ---------------------------------------------------------------------------
+presidio:
+  analyzer:
+    # -- Bundle Presidio Analyzer. Disable and set `url` to use your own.
+    enabled: true
+    url: ""   # external URL when enabled=false, e.g. http://presidio-analyzer:3000
+    image: mcr.microsoft.com/presidio-analyzer:latest
+    # -- Analyzer image used when config.languages holds anything other than
+    #    English alone: Presidio plus the German, French and Italian spaCy
+    #    models (the stock image ships English only). Tag defaults to the
+    #    chart's appVersion.
+    multilingualImage:
+      repository: ghcr.io/palenaai/palena-presidio-analyzer
+      tag: ""
+    # -- ORGANIZATION detection via spaCy NER. ON by default so orgs are
+    #    masked even when no deny-list is configured. spaCy ORG is somewhat
+    #    noisy (occasional false positives) — set false to rely solely on
+    #    the deny-list below.
+    nerOrganization: true
+    # -- Optional exact-match list of known organization names (zero false
+    #    positives, high precision). Complements NER. When non-empty the
+    #    chart mounts a full recognizer registry with this deny-list added.
+    #    Populate with your real client/company names.
+    organizations: []
+    #   - Novartis
+    #   - Roche
+    #   - Contoso Ltd
+    # -- Exact-match deny-lists for any entity type: terms that are always
+    #    detected (and pseudonymized) as that type, in every configured
+    #    language. The entity must also be listed in config.entities.
+    denyLists: []
+    #   - entity: PERSON
+    #     terms: [Project Falcon]
+    #   - entity: ORGANIZATION
+    #     terms: [Contoso Ltd, Fabrikam]
+    resources:
+      requests: { cpu: 250m, memory: 512Mi }
+      limits: { cpu: "2", memory: 2Gi }
+  imageRedactor:
+    # -- Bundle Presidio Image Redactor. Disable and set `url` for your own.
+    enabled: true
+    url: ""   # external URL when enabled=false
+    image: mcr.microsoft.com/presidio-image-redactor:latest
+    resources:
+      requests: { cpu: 250m, memory: 512Mi }
+      limits: { cpu: "2", memory: 2Gi }
+
+# ---------------------------------------------------------------------------
+# Scaling / availability / observability (all optional).
+# ---------------------------------------------------------------------------
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  labels: {}
+
+# -- Pod-level knobs.
+podAnnotations: {}
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  fsGroup: 65532
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+nodeSelector: {}
+tolerations: []
+affinity: {}

@@ -1,0 +1,36 @@
+{{ include "pseudonymizer.fullname" . }} is deploying.
+
+Guardrail service (in-cluster):
+  http://{{ include "pseudonymizer.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}
+
+Wire it into your LiteLLM proxy as a generic_guardrail_api guardrail:
+
+  guardrails:
+    - guardrail_name: palena-pseudonymizer
+      litellm_params:
+        guardrail: generic_guardrail_api
+        api_base: http://{{ include "pseudonymizer.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}
+        mode: [pre_call, post_call]
+        default_on: true
+        unreachable_fallback: fail_closed
+        streaming_transform_mode: incremental_diff
+        additional_provider_specific_params:
+          streaming_transform_mode: incremental_diff
+
+Dependencies:
+  Redis:                   {{ if .Values.redis.enabled }}bundled ({{ include "pseudonymizer.redis.fullname" . }}){{ else }}external — {{ .Values.redis.url }}{{ end }}
+  Presidio Analyzer:       {{ if .Values.presidio.analyzer.enabled }}bundled ({{ include "pseudonymizer.analyzer.fullname" . }}){{ else }}external — {{ .Values.presidio.analyzer.url }}{{ end }}
+  Presidio Image Redactor: {{ if .Values.presidio.imageRedactor.enabled }}bundled ({{ include "pseudonymizer.imageRedactor.fullname" . }}){{ else }}external — {{ .Values.presidio.imageRedactor.url }}{{ end }}
+
+Organization detection:
+  Entities:  {{ .Values.config.entities }}
+  NER ORG:   {{ if .Values.presidio.analyzer.nerOrganization }}ENABLED (baseline defense){{ else }}disabled{{ end }}
+  Deny-list: {{ if gt (len .Values.presidio.analyzer.organizations) 0 }}{{ len .Values.presidio.analyzer.organizations }} known name(s){{ else }}none (add names under presidio.analyzer.organizations for high-precision matching){{ end }}
+
+Check readiness:
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "pseudonymizer.fullname" . }}
+{{- if not .Values.apiKey.enabled }}
+
+WARNING: apiKey.enabled is false — the service accepts any request. Set
+apiKey.enabled=true with a value (or existingSecret) before exposing it.
+{{- end }}

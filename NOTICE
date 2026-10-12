@@ -1,0 +1,19 @@
+pii-gateway
+Copyright 2026 Zotho
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product includes a modified copy of palena-litellm-pseudonymizer
+(vendor/palena), Apache-2.0, Copyright 2026 bitkaio LLC,
+https://github.com/PalenaAI/palena-litellm-pseudonymizer, upstream commit e2d669b.
+Upstream copyright headers and license text are kept in vendor/palena.
+
+Modifications to the upstream code:
+- Session TTL in seconds, with 0 meaning keep forever.
+- No-restore entity types: selected types (e.g. SECRET) stay masked in responses.
+- Multi-language analysis: results of several languages are unioned, with script-based language trimming.
+- Exploded views for escaped text (JSON/Python-repr strings with literal \n, \", ...) so values inside them are found and replaced.
+- Allowlist file plus structural and common-word filters that drop false-positive NER hits.
+- Pattern-only indices: system/developer text is scanned with pattern recognizers only (no NER).
+- Escape-aware replacer boundary: a literal escape sequence before a value no longer blocks the word boundary.
+- Recognizer metadata (recognizer name/kind) carried through to results for auditing.

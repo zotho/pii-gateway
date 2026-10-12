@@ -1,0 +1,24 @@
+# Real-provider instance (:14001). Upstream traffic goes through mitmproxy capture (scripts/real-up.sh).
+model_list:
+  # Claude Code: subscription OAuth is forwarded from the client (no api key here)
+  - model_name: "claude-*"
+    litellm_params:
+      model: anthropic/claude-*
+      api_base: http://127.0.0.1:18081
+  # Codex / Pi via ChatGPT backend (Responses API)
+  - model_name: gpt-6-astra
+    litellm_params:
+      model: openai/gpt-6-astra
+      api_base: http://127.0.0.1:18082/backend-api/codex
+      api_key: os.environ/CHATGPT_ACCESS_TOKEN
+      extra_headers:
+        chatgpt-account-id: os.environ/CHATGPT_ACCOUNT_ID
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  forward_client_headers_to_llm_api: true
+
+litellm_settings:
+  callbacks: pii_bridge.proxy_handler_instance
+  drop_params: false
+  turn_off_message_logging: false

@@ -1,0 +1,87 @@
+{{- if .Values.presidio.analyzer.enabled }}
+{{- $needsConfig := include "pseudonymizer.analyzer.needsConfig" . -}}
+{{- $recognizers := include "pseudonymizer.analyzer.needsRecognizers" . -}}
+{{- $multi := include "pseudonymizer.multilingual" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "pseudonymizer.analyzer.fullname" . }}
+  labels:
+    {{- include "pseudonymizer.labels" . | nindent 4 }}
+    app.kubernetes.io/component: presidio-analyzer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "pseudonymizer.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: presidio-analyzer
+  template:
+    metadata:
+      {{- if $needsConfig }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/presidio-analyzer-config.yaml") . | sha256sum }}
+      {{- end }}
+      labels:
+        {{- include "pseudonymizer.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: presidio-analyzer
+    spec:
+      containers:
+        - name: analyzer
+          image: {{ include "pseudonymizer.analyzer.image" . | quote }}
+          ports:
+            - name: http
+              containerPort: 3000
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.presidio.analyzer.resources | nindent 12 }}
+          {{- if $needsConfig }}
+          volumeMounts:
+            {{- if or .Values.presidio.analyzer.nerOrganization $multi }}
+            - name: config
+              mountPath: /app/presidio_analyzer/conf/default.yaml
+              subPath: default.yaml
+              readOnly: true
+            {{- end }}
+            {{- if $multi }}
+            - name: config
+              mountPath: /app/presidio_analyzer/conf/default_analyzer.yaml
+              subPath: default_analyzer.yaml
+              readOnly: true
+            {{- end }}
+            {{- if $recognizers }}
+            - name: config
+              mountPath: /app/presidio_analyzer/conf/default_recognizers.yaml
+              subPath: default_recognizers.yaml
+              readOnly: true
+            {{- end }}
+          {{- end }}
+      {{- if $needsConfig }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "pseudonymizer.analyzer.fullname" . }}-config
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "pseudonymizer.analyzer.fullname" . }}
+  labels:
+    {{- include "pseudonymizer.labels" . | nindent 4 }}
+    app.kubernetes.io/component: presidio-analyzer
+spec:
+  ports:
+    - port: 3000
+      targetPort: http
+      name: http
+  selector:
+    {{- include "pseudonymizer.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: presidio-analyzer
+{{- end }}

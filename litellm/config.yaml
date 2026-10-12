@@ -1,0 +1,34 @@
+model_list:
+  - model_name: mock-claude
+    litellm_params:
+      model: anthropic/mock-claude
+      api_base: http://127.0.0.1:19000
+      api_key: mock-key
+  - model_name: mock-gpt
+    litellm_params:
+      model: openai/mock-gpt
+      api_base: http://127.0.0.1:19000/v1
+      api_key: mock-key
+  # deterministic scripted agent for the demo app (/v1/responses only)
+  - model_name: mock-agent
+    litellm_params:
+      model: openai/mock-agent
+      api_base: http://127.0.0.1:19000/v1
+      api_key: mock-key
+  # wildcard so any claude-* name (Claude Code) routes to the mock Anthropic upstream
+  - model_name: "claude-*"
+    litellm_params:
+      model: anthropic/*
+      api_base: http://127.0.0.1:19000
+      api_key: mock-key
+
+# Pseudonymization is done by litellm/pii_bridge.py (NOT the stock generic_guardrail_api/palena
+# guardrail - see docs/DESIGN.md). Palena is called directly over HTTP.
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+
+litellm_settings:
+  callbacks: pii_bridge.proxy_handler_instance
+  drop_params: false
+  turn_off_message_logging: false

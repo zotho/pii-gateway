@@ -1,0 +1,22 @@
+# Copyright (c) 2026 bitkaio LLC. All rights reserved.
+# Licensed under the Apache License, Version 2.0. See LICENSE for details.
+#
+# Presidio Analyzer with the German, French and Italian spaCy models next to
+# the English one the stock image ships. The chart switches to this image when
+# config.languages holds anything other than English alone; which models load
+# is decided at runtime by the mounted NLP config, so an English-only analyzer
+# never pays for the others.
+#
+# Published as ghcr.io/palenaai/palena-presidio-analyzer:<release version>.
+ARG PRESIDIO_VERSION=2.2.362
+FROM mcr.microsoft.com/presidio-analyzer:${PRESIDIO_VERSION}
+
+# Must match the spaCy minor the Presidio image ships (3.8.x).
+ARG SPACY_MODEL_VERSION=3.8.0
+
+USER root
+RUN python -m spacy download "de_core_news_lg-${SPACY_MODEL_VERSION}" --direct \
+ && python -m spacy download "fr_core_news_lg-${SPACY_MODEL_VERSION}" --direct \
+ && python -m spacy download "it_core_news_lg-${SPACY_MODEL_VERSION}" --direct \
+ && python -m spacy validate
+USER 1001
