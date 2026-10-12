@@ -1,0 +1,30 @@
+name: ci
+on:
+  push:
+  pull_request:
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: vendor/palena
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: vendor/palena/go.mod
+          cache-dependency-path: vendor/palena/go.sum
+      - run: go vet ./...
+      - run: go test ./...
+
+  python-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      # tests/unit need no running services; the spaCy model wheels are only used by the live stack
+      - run: uv sync --frozen --no-install-package en-core-web-lg --no-install-package ru-core-news-lg
+      - run: uv run --no-sync pytest tests/unit -q
